@@ -2,10 +2,10 @@ package coredns_mysql
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/miekg/dns"
 )
 
@@ -21,17 +21,17 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 		query = strings.TrimSuffix(name, "."+zone)
 	}
 
-	log.Printf("Searching for records - Zone: %s, Name: %s, Types: %v\n", zone, query, types)
+	log.Debug(fmt.Sprintf("Searching for records - Zone: %s, Name: %s, Types: %v", zone, query, types))
 
 	sqlQuery := fmt.Sprintf("SELECT name, zone, ttl, record_type, content FROM %s WHERE zone = ? AND name = ? AND record_type IN ('%s')",
 		handler.tableName,
 		strings.Join(types, "','"))
 
-	log.Printf("Executing query: %s with params: [%s, %s]\n", sqlQuery, zone, query)
+	log.Debug(fmt.Sprintf("Executing query: %s with params: [%s, %s]", sqlQuery, zone, query))
 
 	result, err := db.Query(sqlQuery, zone, query)
 	if err != nil {
-		log.Printf("Query error: %v\n", err)
+		log.Error(err)
 		return nil, err
 	}
 
@@ -44,12 +44,12 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 	for result.Next() {
 		err = result.Scan(&recordName, &recordZone, &ttl, &recordType, &content)
 		if err != nil {
-			log.Printf("Scan error: %v\n", err)
+			log.Error(err)
 			return nil, err
 		}
 
-		log.Printf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s\n",
-			recordName, recordZone, recordType, ttl, content)
+		log.Debug(fmt.Sprintf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s",
+			recordName, recordZone, recordType, ttl, content))
 
 		records = append(records, &Record{
 			Name:       recordName,
@@ -63,7 +63,7 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 
 	// If no records found, check for wildcard records.
 	if len(records) == 0 && name != zone {
-		log.Printf("No direct records found, checking wildcards...\n")
+		log.Debug("No direct records found, checking wildcards...")
 		return handler.findWildcardRecords(zone, name, types...)
 	}
 
