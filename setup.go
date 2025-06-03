@@ -2,6 +2,7 @@ package coredns_mysql
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -141,14 +142,24 @@ func mysqlParse(c *caddy.Controller) (*CoreDNSMySql, error) {
 }
 
 func (handler *CoreDNSMySql) db() (*sql.DB, error) {
+	fmt.Printf("Attempting to connect to MySQL with DSN: %s\n", os.ExpandEnv(handler.Dsn))
 	db, err := sql.Open("mysql", os.ExpandEnv(handler.Dsn))
 	if err != nil {
+		fmt.Printf("Error opening database connection: %v\n", err)
 		return nil, err
 	}
 
 	db.SetConnMaxLifetime(handler.MaxLifetime)
 	db.SetMaxOpenConns(handler.MaxOpenConnections)
 	db.SetMaxIdleConns(handler.MaxIdleConnections)
+
+	// Test the connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Printf("Error pinging database: %v\n", err)
+		return nil, err
+	}
+	fmt.Println("Successfully connected to MySQL database")
 
 	return db, nil
 }
