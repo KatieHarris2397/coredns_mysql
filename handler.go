@@ -1,6 +1,7 @@
 package coredns_mysql
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
@@ -27,25 +28,33 @@ type CoreDNSMySql struct {
 
 // ServeDNS implements the plugin.Handler interface.
 func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	fmt.Printf("=== Starting DNS request handling ===\n")
 	state := request.Request{W: w, Req: r}
 
 	qName := state.Name()
 	qType := state.Type()
+	fmt.Printf("DNS Query - Name: %s, Type: %s\n", qName, qType)
 
 	if time.Since(handler.lastZoneUpdate) > handler.zoneUpdateTime {
+		fmt.Printf("Updating zones...\n")
 		err := handler.loadZones()
 		if err != nil {
+			fmt.Printf("Error loading zones: %v\n", err)
 			return handler.errorResponse(state, dns.RcodeServerFailure, err)
 		}
 	}
 
 	qZone := plugin.Zones(handler.zones).Matches(qName)
+	fmt.Printf("Matched zone: %s\n", qZone)
 	if qZone == "" {
+		fmt.Printf("No matching zone found, passing to next handler\n")
 		return plugin.NextOrFailure(handler.Name(), handler.Next, ctx, w, r)
 	}
 
+	fmt.Printf("Searching for records in zone: %s\n", qZone)
 	records, err := handler.findRecord(qZone, qName, qType)
 	if err != nil {
+		fmt.Printf("Error finding records: %v\n", err)
 		return handler.errorResponse(state, dns.RcodeServerFailure, err)
 	}
 
@@ -60,7 +69,7 @@ func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter,
 		records = append(records, recs...)
 	}
 
-    if qType == "SOA" {
+	if qType == "SOA" {
 		recsNs, err := handler.findRecord(qZone, qName, "NS")
 		if err != nil {
 			return handler.errorResponse(state, dns.RcodeServerFailure, err)
