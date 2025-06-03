@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coredns/coredns/plugin/pkg/log"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/miekg/dns"
 )
 
@@ -21,17 +21,17 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 		query = strings.TrimSuffix(name, "."+zone)
 	}
 
-	log.Debug(fmt.Sprintf("Searching for records - Zone: %s, Name: %s, Types: %v", zone, query, types))
+	clog.Info(fmt.Sprintf("Searching for records - Zone: %s, Name: %s, Types: %v", zone, query, types))
 
 	sqlQuery := fmt.Sprintf("SELECT name, zone, ttl, record_type, content FROM %s WHERE zone = ? AND name = ? AND record_type IN ('%s')",
 		handler.tableName,
 		strings.Join(types, "','"))
 
-	log.Debug(fmt.Sprintf("Executing query: %s with params: [%s, %s]", sqlQuery, zone, query))
+	clog.Info(fmt.Sprintf("Executing query: %s with params: [%s, %s]", sqlQuery, zone, query))
 
 	result, err := db.Query(sqlQuery, zone, query)
 	if err != nil {
-		log.Error(err)
+		clog.Error(err)
 		return nil, err
 	}
 
@@ -44,11 +44,11 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 	for result.Next() {
 		err = result.Scan(&recordName, &recordZone, &ttl, &recordType, &content)
 		if err != nil {
-			log.Error(err)
+			clog.Error(err)
 			return nil, err
 		}
 
-		log.Debug(fmt.Sprintf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s",
+		clog.Info(fmt.Sprintf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s",
 			recordName, recordZone, recordType, ttl, content))
 
 		records = append(records, &Record{
@@ -63,7 +63,7 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 
 	// If no records found, check for wildcard records.
 	if len(records) == 0 && name != zone {
-		log.Debug("No direct records found, checking wildcards...")
+		clog.Info("No direct records found, checking wildcards...")
 		return handler.findWildcardRecords(zone, name, types...)
 	}
 
