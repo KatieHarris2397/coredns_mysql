@@ -2,6 +2,7 @@ package coredns_mysql
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -20,17 +21,17 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 		query = strings.TrimSuffix(name, "."+zone)
 	}
 
-	fmt.Printf("Searching for records - Zone: %s, Name: %s, Types: %v\n", zone, query, types)
+	log.Printf("Searching for records - Zone: %s, Name: %s, Types: %v\n", zone, query, types)
 
 	sqlQuery := fmt.Sprintf("SELECT name, zone, ttl, record_type, content FROM %s WHERE zone = ? AND name = ? AND record_type IN ('%s')",
 		handler.tableName,
 		strings.Join(types, "','"))
 
-	fmt.Printf("Executing query: %s with params: [%s, %s]\n", sqlQuery, zone, query)
+	log.Printf("Executing query: %s with params: [%s, %s]\n", sqlQuery, zone, query)
 
 	result, err := db.Query(sqlQuery, zone, query)
 	if err != nil {
-		fmt.Printf("Query error: %v\n", err)
+		log.Printf("Query error: %v\n", err)
 		return nil, err
 	}
 
@@ -43,11 +44,11 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 	for result.Next() {
 		err = result.Scan(&recordName, &recordZone, &ttl, &recordType, &content)
 		if err != nil {
-			fmt.Printf("Scan error: %v\n", err)
+			log.Printf("Scan error: %v\n", err)
 			return nil, err
 		}
 
-		fmt.Printf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s\n",
+		log.Printf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s\n",
 			recordName, recordZone, recordType, ttl, content)
 
 		records = append(records, &Record{
@@ -62,7 +63,7 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 
 	// If no records found, check for wildcard records.
 	if len(records) == 0 && name != zone {
-		fmt.Printf("No direct records found, checking wildcards...\n")
+		log.Printf("No direct records found, checking wildcards...\n")
 		return handler.findWildcardRecords(zone, name, types...)
 	}
 
