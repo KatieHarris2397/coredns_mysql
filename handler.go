@@ -29,17 +29,22 @@ type CoreDNSMySql struct {
 
 // ServeDNS implements the plugin.Handler interface.
 func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	fmt.Printf("[DEBUG] === Starting DNS request handling ===\n")
+	fmt.Printf("[REQUEST] === New DNS Request ===\n")
+	fmt.Printf("[REQUEST] Question: %+v\n", r.Question)
 	clog.Info("=== Starting DNS request handling ===")
 	state := request.Request{W: w, Req: r}
 
 	qName := state.Name()
 	qType := state.Type()
-	fmt.Printf("[DEBUG] DNS Query - Name: %s, Type: %s\n", qName, qType)
+	fmt.Printf("[REQUEST] Query - Name: %s, Type: %s\n", qName, qType)
 	clog.Info("DNS Query - Name: " + qName + ", Type: " + qType)
 
+	fmt.Printf("[REQUEST] Current zones: %v\n", handler.zones)
+	fmt.Printf("[REQUEST] Last zone update: %v\n", handler.lastZoneUpdate)
+	fmt.Printf("[REQUEST] Zone update interval: %v\n", handler.zoneUpdateTime)
+
 	if time.Since(handler.lastZoneUpdate) > handler.zoneUpdateTime {
-		fmt.Printf("[DEBUG] Updating zones...\n")
+		fmt.Printf("[REQUEST] Zone update needed, last update was %v ago\n", time.Since(handler.lastZoneUpdate))
 		clog.Info("Updating zones...")
 		err := handler.loadZones()
 		if err != nil {
@@ -47,18 +52,19 @@ func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter,
 			clog.Error(err)
 			return handler.errorResponse(state, dns.RcodeServerFailure, err)
 		}
+		fmt.Printf("[REQUEST] Zones updated: %v\n", handler.zones)
 	}
 
 	qZone := plugin.Zones(handler.zones).Matches(qName)
-	fmt.Printf("[DEBUG] Matched zone: %s\n", qZone)
+	fmt.Printf("[REQUEST] Matched zone: %s\n", qZone)
 	clog.Info("Matched zone: " + qZone)
 	if qZone == "" {
-		fmt.Printf("[DEBUG] No matching zone found, passing to next handler\n")
+		fmt.Printf("[REQUEST] No matching zone found, passing to next handler\n")
 		clog.Info("No matching zone found, passing to next handler")
 		return plugin.NextOrFailure(handler.Name(), handler.Next, ctx, w, r)
 	}
 
-	fmt.Printf("[DEBUG] Searching for records in zone: %s\n", qZone)
+	fmt.Printf("[REQUEST] Searching for records in zone: %s\n", qZone)
 	clog.Info("Searching for records in zone: " + qZone)
 	records, err := handler.findRecord(qZone, qName, qType)
 	if err != nil {
@@ -66,6 +72,8 @@ func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter,
 		clog.Error(err)
 		return handler.errorResponse(state, dns.RcodeServerFailure, err)
 	}
+
+	fmt.Printf("[REQUEST] Found %d records\n", len(records))
 
 	var recordNotFound bool
 	if len(records) == 0 {
