@@ -21,16 +21,19 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 		query = strings.TrimSuffix(name, "."+zone)
 	}
 
+	fmt.Printf("[DEBUG] Searching for records - Zone: %s, Name: %s, Types: %v\n", zone, query, types)
 	clog.Info(fmt.Sprintf("Searching for records - Zone: %s, Name: %s, Types: %v", zone, query, types))
 
 	sqlQuery := fmt.Sprintf("SELECT name, zone, ttl, record_type, content FROM %s WHERE zone = ? AND name = ? AND record_type IN ('%s')",
 		handler.tableName,
 		strings.Join(types, "','"))
 
+	fmt.Printf("[DEBUG] Executing query: %s with params: [%s, %s]\n", sqlQuery, zone, query)
 	clog.Info(fmt.Sprintf("Executing query: %s with params: [%s, %s]", sqlQuery, zone, query))
 
 	result, err := db.Query(sqlQuery, zone, query)
 	if err != nil {
+		fmt.Printf("[ERROR] Query error: %v\n", err)
 		clog.Error(err)
 		return nil, err
 	}
@@ -44,10 +47,13 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 	for result.Next() {
 		err = result.Scan(&recordName, &recordZone, &ttl, &recordType, &content)
 		if err != nil {
+			fmt.Printf("[ERROR] Scan error: %v\n", err)
 			clog.Error(err)
 			return nil, err
 		}
 
+		fmt.Printf("[DEBUG] Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s\n",
+			recordName, recordZone, recordType, ttl, content)
 		clog.Info(fmt.Sprintf("Found record - Name: %s, Zone: %s, Type: %s, TTL: %d, Content: %s",
 			recordName, recordZone, recordType, ttl, content))
 
@@ -63,6 +69,7 @@ func (handler *CoreDNSMySql) findRecord(zone string, name string, types ...strin
 
 	// If no records found, check for wildcard records.
 	if len(records) == 0 && name != zone {
+		fmt.Printf("[DEBUG] No direct records found, checking wildcards...\n")
 		clog.Info("No direct records found, checking wildcards...")
 		return handler.findWildcardRecords(zone, name, types...)
 	}

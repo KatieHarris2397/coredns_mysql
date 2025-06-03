@@ -1,6 +1,7 @@
 package coredns_mysql
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
@@ -28,32 +29,40 @@ type CoreDNSMySql struct {
 
 // ServeDNS implements the plugin.Handler interface.
 func (handler *CoreDNSMySql) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	fmt.Printf("[DEBUG] === Starting DNS request handling ===\n")
 	clog.Info("=== Starting DNS request handling ===")
 	state := request.Request{W: w, Req: r}
 
 	qName := state.Name()
 	qType := state.Type()
+	fmt.Printf("[DEBUG] DNS Query - Name: %s, Type: %s\n", qName, qType)
 	clog.Info("DNS Query - Name: " + qName + ", Type: " + qType)
 
 	if time.Since(handler.lastZoneUpdate) > handler.zoneUpdateTime {
+		fmt.Printf("[DEBUG] Updating zones...\n")
 		clog.Info("Updating zones...")
 		err := handler.loadZones()
 		if err != nil {
+			fmt.Printf("[ERROR] Failed to load zones: %v\n", err)
 			clog.Error(err)
 			return handler.errorResponse(state, dns.RcodeServerFailure, err)
 		}
 	}
 
 	qZone := plugin.Zones(handler.zones).Matches(qName)
+	fmt.Printf("[DEBUG] Matched zone: %s\n", qZone)
 	clog.Info("Matched zone: " + qZone)
 	if qZone == "" {
+		fmt.Printf("[DEBUG] No matching zone found, passing to next handler\n")
 		clog.Info("No matching zone found, passing to next handler")
 		return plugin.NextOrFailure(handler.Name(), handler.Next, ctx, w, r)
 	}
 
+	fmt.Printf("[DEBUG] Searching for records in zone: %s\n", qZone)
 	clog.Info("Searching for records in zone: " + qZone)
 	records, err := handler.findRecord(qZone, qName, qType)
 	if err != nil {
+		fmt.Printf("[ERROR] Failed to find records: %v\n", err)
 		clog.Error(err)
 		return handler.errorResponse(state, dns.RcodeServerFailure, err)
 	}
